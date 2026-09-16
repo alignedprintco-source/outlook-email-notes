@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email Notes</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1f1f1f; --muted: #6b6b6b; --line: #d9d9d9;
+    --accent: #1d4ed8; --ok: #15803d; --warn: #b45309; --err: #b91c1c;
+    --box: #fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1f1f1f; --fg: #f0f0f0; --muted: #a0a0a0; --line: #444; --box: #2a2a2a; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+    font: 13px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  body { padding: 12px 14px 18px; }
+  h1 { font-size: 14px; margin: 0 0 2px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12px; margin: 0 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  section { margin-bottom: 16px; }
+  label { display: flex; justify-content: space-between; align-items: baseline;
+    font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+  label .hint { font-weight: 400; color: var(--muted); font-size: 11px; }
+  textarea { width: 100%; min-height: 150px; resize: vertical; padding: 8px 10px;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--box); color: var(--fg);
+    font: inherit; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  textarea.small { min-height: 90px; }
+  .status { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; min-height: 15px; }
+  .status.ok { color: var(--ok); } .status.warn { color: var(--warn); } .status.err { color: var(--err); }
+  #loading { color: var(--muted); padding: 20px 0; text-align: center; }
+  .hidden { display: none; }
+  .tip { font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <div id="loading">Loading…</div>
+
+  <div id="app" class="hidden">
+    <h1 id="subject">—</h1>
+    <p class="sub" id="from">—</p>
+
+    <section>
+      <label for="itemNote">Notes on this email <span class="hint" id="itemCount"></span></label>
+      <textarea id="itemNote" placeholder="Paper type, quantity, finishing, quote given, proof status…"></textarea>
+      <div class="status" id="itemStatus"><span></span></div>
+    </section>
+
+    <section>
+      <label for="senderNote">Notes on this customer <span class="hint" id="senderHint"></span></label>
+      <textarea id="senderNote" class="small" placeholder="Shows on every email from this address — preferred stock, pricing agreements, how they like proofs…"></textarea>
+      <div class="status" id="senderStatus"><span></span></div>
+    </section>
+
+    <p class="tip">Notes save automatically and are private to your mailbox. Pin this panel (📌 in its top corner) to keep it open while you click through emails.</p>
+  </div>
+
+<script>
+(function () {
+  var ITEM_KEY = "apcoNote";          // stored on the message itself (custom property)
+  var SENDER_PREFIX = "apcoSender:";  // stored in mailbox roaming settings, keyed by sender address
+  var ITEM_LIMIT = 2400;              // Outlook caps custom properties at ~2500 chars total
+  var ROAMING_LIMIT = 32 * 1024;      // Outlook caps roaming settings at 32 KB total
+
+  var $ = function (id) { return document.getElementById(id); };
+  var customProps = null;
+  var currentSender = "";
+  var itemTimer = null, senderTimer = null;
+  var suppress = false; // ignore input events while we populate fields
+
+  Office.onReady(function (info) {
+    if (info.host !== Office.HostType.Outlook) { $("loading").textContent = "Open this inside Outlook."; return; }
+    loadItem();
+    // When pinned, the pane stays open; reload when the user selects another email.
+    Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, function () { loadItem(); });
+    $("itemNote").addEventListener("input", onItemInput);
+    $("senderNote").addEventListener("input", onSenderInput);
+  });
+
+  function loadItem() {
+    var item = Office.context.mailbox.item;
+    if (!item) { showEmpty(); return; }
+    $("loading").classList.remove("hidden"); $("app").classList.add("hidden");
+    clearTimeout(itemTimer); clearTimeout(senderTimer);
+
+    $("subject").textContent = item.subject || "(no subject)";
+    var from = item.from || item.sender || null;
+    currentSender = from && from.emailAddress ? from.emailAddress.toLowerCase() : "";
+    $("from").textContent = from ? ((from.displayName ? from.displayName + " · " : "") + (from.emailAddress || "")) : "";
+    $("from").title = $("from").textContent;
+
+    // Sender-level note (roaming settings, sync instantly)
+    suppress = true;
+    $("senderNote").value = currentSender ? (Office.context.roamingSettings.get(SENDER_PREFIX + currentSender) || "") : "";
+    $("senderNote").disabled = !currentSender;
+    $("senderHint").textContent = currentSender ? "" : "(no sender address)";
+    setStatus("senderStatus", "", "");
+
+    // Email-level note (custom properties on the message)
+    item.loadCustomPropertiesAsync(function (r) {
+      if (r.status === Office.AsyncResultStatus.Succeeded) {
+        customProps = r.value;
+        $("itemNote").value = customProps.get(ITEM_KEY) || "";
+        $("itemNote").disabled = false;
+        setStatus("itemStatus", "", "");
+      } else {
+        customProps = null;
+        $("itemNote").value = "";
+        $("itemNote").disabled = true;
+        setStatus("itemStatus", "Can't store notes on this message (" + (r.error && r.error.message || "unknown error") + ")", "err");
+      }
+      updateItemCount();
+      suppress = false;
+      $("loading").classList.add("hidden"); $("app").classList.remove("hidden");
+    });
+  }
+
+  function showEmpty() {
+    $("loading").textContent = "Select an email to add notes.";
+    $("loading").classList.remove("hidden"); $("app").classList.add("hidden");
+  }
+
+  // ---------- Email-level note ----------
+  function onItemInput() {
+    if (suppress) return;
+    updateItemCount();
+    setStatus("itemStatus", "Saving…", "");
+    clearTimeout(itemTimer);
+    itemTimer = setTimeout(saveItemNote, 700);
+  }
+
+  function saveItemNote() {
+    if (!customProps) return;
+    var text = $("itemNote").value;
+    if (text.length > ITEM_LIMIT) {
+      setStatus("itemStatus", "Too long — Outlook only lets us store about " + ITEM_LIMIT + " characters per email. Put the rest in the customer note.", "err");
+      return;
+    }
+    if (text.trim() === "") customProps.remove(ITEM_KEY); else customProps.set(ITEM_KEY, text);
+    customProps.saveAsync(function (r) {
+      if (r.status === Office.AsyncResultStatus.Succeeded) setStatus("itemStatus", "Saved " + timeNow(), "ok");
+      else setStatus("itemStatus", "Save failed: " + (r.error && r.error.message || "unknown error"), "err");
+    });
+  }
+
+  function updateItemCount() {
+    var n = $("itemNote").value.length;
+    $("itemCount").textContent = n ? n + " / " + ITEM_LIMIT : "";
+    $("itemCount").style.color = n > ITEM_LIMIT ? "var(--err)" : "";
+  }
+
+  // ---------- Customer (sender) note ----------
+  function onSenderInput() {
+    if (suppress || !currentSender) return;
+    setStatus("senderStatus", "Saving…", "");
+    clearTimeout(senderTimer);
+    senderTimer = setTimeout(saveSenderNote, 700);
+  }
+
+  function saveSenderNote() {
+    var key = SENDER_PREFIX + currentSender;
+    var text = $("senderNote").value;
+    var rs = Office.context.roamingSettings;
+    if (text.trim() === "") rs.remove(key); else rs.set(key, text);
+    rs.saveAsync(function (r) {
+      if (r.status === Office.AsyncResultStatus.Succeeded) {
+        var used = estimateRoamingSize();
+        if (used > ROAMING_LIMIT * 0.85) setStatus("senderStatus", "Saved — customer-notes storage is " + Math.round(used / ROAMING_LIMIT * 100) + "% full", "warn");
+        else setStatus("senderStatus", "Saved " + timeNow(), "ok");
+      } else {
+        setStatus("senderStatus", "Save failed: " + (r.error && r.error.message || "storage may be full"), "err");
+      }
+    });
+  }
+
+  function estimateRoamingSize() {
+    // No API for total size; walk our own keys via a saved index. Cheap approximation:
+    try {
+      var rs = Office.context.roamingSettings, idx = rs.get("apcoIndex") || [];
+      if (idx.indexOf(currentSender) < 0) { idx.push(currentSender); rs.set("apcoIndex", idx); rs.saveAsync(function(){}); }
+      var total = 0;
+      for (var i = 0; i < idx.length; i++) total += (rs.get(SENDER_PREFIX + idx[i]) || "").length + idx[i].length + 20;
+      return total;
+    } catch (e) { return 0; }
+  }
+
+  // ---------- helpers ----------
+  function setStatus(id, msg, cls) {
+    var el = $(id); el.className = "status " + (cls || ""); el.firstChild.textContent = msg;
+  }
+  function timeNow() {
+    var d = new Date(); return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+})();
+</script>
+</body>
+</html>

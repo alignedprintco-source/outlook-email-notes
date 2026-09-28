@@ -7,7 +7,7 @@
 
   <!-- Unique ID for this add-in. Keep it the same if you ever update the add-in. -->
   <Id>3f2a9c4e-7b1d-4e8a-9c6f-2d5b8a1e4f70</Id>
-  <Version>1.0.1.0</Version>
+  <Version>1.0.2.0</Version>
   <ProviderName>Aligned Print Co.</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Email Notes"/>
@@ -29,7 +29,7 @@
   <FormSettings>
     <Form xsi:type="ItemRead">
       <DesktopSettings>
-        <SourceLocation DefaultValue="https://alignedprintco-source.github.io/outlook-email-notes/taskpane.html"/>
+        <SourceLocation DefaultValue="https://alignedprintco-source.github.io/outlook-email-notes/taskpane.html?v=2"/>
         <RequestedHeight>250</RequestedHeight>
       </DesktopSettings>
     </Form>
@@ -86,7 +86,7 @@
         <bt:Image id="Icon.80" DefaultValue="https://alignedprintco-source.github.io/outlook-email-notes/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://alignedprintco-source.github.io/outlook-email-notes/taskpane.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://alignedprintco-source.github.io/outlook-email-notes/taskpane.html?v=2"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="grpNotes.Label" DefaultValue="Notes"/>
@@ -140,7 +140,7 @@
           <bt:Image id="Icon.80" DefaultValue="https://alignedprintco-source.github.io/outlook-email-notes/icon-80.png"/>
         </bt:Images>
         <bt:Urls>
-          <bt:Url id="Taskpane.Url" DefaultValue="https://alignedprintco-source.github.io/outlook-email-notes/taskpane.html"/>
+          <bt:Url id="Taskpane.Url" DefaultValue="https://alignedprintco-source.github.io/outlook-email-notes/taskpane.html?v=2"/>
         </bt:Urls>
         <bt:ShortStrings>
           <bt:String id="grpNotes.Label" DefaultValue="Notes"/>

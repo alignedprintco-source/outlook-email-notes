@@ -56,6 +56,7 @@
     </section>
 
     <p class="tip">Notes save automatically and are private to your mailbox. Pin this panel (📌 in its top corner) to keep it open while you click through emails. Any email with a note gets tagged with the <strong>Has Note</strong> category, so you can spot it in your inbox list at a glance.</p>
+    <p class="tip hidden" id="categoryStatus"></p>
   </div>
 
 <script>
@@ -66,7 +67,6 @@
   var ROAMING_LIMIT = 32 * 1024;      // Outlook caps roaming settings at 32 KB total
   var NOTE_CATEGORY = "Has Note";     // Outlook category tag, so noted emails are visible in the inbox list
                                        // (plain text only — Outlook silently drops emoji from category names)
-  var categorySupported = false;      // set once we know this Outlook can do item categories (Mailbox 1.8+)
   var categoryEnsured = false;        // we only need to create the master category once per session
 
   var $ = function (id) { return document.getElementById(id); };
@@ -77,7 +77,6 @@
 
   Office.onReady(function (info) {
     if (info.host !== Office.HostType.Outlook) { $("loading").textContent = "Open this inside Outlook."; return; }
-    categorySupported = !!(Office.context.requirements && Office.context.requirements.isSetSupported("Mailbox", "1.8"));
     loadItem();
     // When pinned, the pane stays open; reload when the user selects another email.
     Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, function () { loadItem(); });
@@ -132,32 +131,65 @@
   // in the inbox list — Outlook shows category tags next to the subject line.
   function ensureCategoryExists(callback) {
     if (categoryEnsured) { callback(); return; }
+    if (!Office.context.mailbox.masterCategories) {
+      showCategoryError("This Outlook doesn't support the category API (masterCategories missing).");
+      return;
+    }
     Office.context.mailbox.masterCategories.getAsync(function (res) {
-      if (res.status !== Office.AsyncResultStatus.Succeeded) { callback(); return; }
+      if (res.status !== Office.AsyncResultStatus.Succeeded) {
+        showCategoryError("Couldn't read categories: " + (res.error && res.error.message || res.status));
+        return;
+      }
       var exists = (res.value || []).some(function (c) { return c.displayName === NOTE_CATEGORY; });
-      if (exists) { categoryEnsured = true; callback(); return; }
+      if (exists) { categoryEnsured = true; showCategoryError(""); callback(); return; }
       Office.context.mailbox.masterCategories.addAsync(
         [{ displayName: NOTE_CATEGORY, color: Office.MailboxEnums.CategoryColor.Preset9 }],
-        function () { categoryEnsured = true; callback(); }
+        function (addRes) {
+          if (addRes.status !== Office.AsyncResultStatus.Succeeded) {
+            showCategoryError("Couldn't create the Has Note category: " + (addRes.error && addRes.error.message || addRes.status));
+            return;
+          }
+          categoryEnsured = true; showCategoryError(""); callback();
+        }
       );
     });
   }
 
   function setNoteCategory(shouldHaveTag) {
-    if (!categorySupported) return;
     var item = Office.context.mailbox.item;
-    if (!item || !item.categories) return;
+    if (!item || !item.categories) {
+      showCategoryError("This item doesn't support categories.");
+      return;
+    }
     var targetItem = item; // guard against the selection changing before this callback runs
     item.categories.getAsync(function (r) {
-      if (r.status !== Office.AsyncResultStatus.Succeeded) return;
-      if (Office.context.mailbox.item !== targetItem) return; // user moved on to another email
+      if (r.status !== Office.AsyncResultStatus.Succeeded) {
+        showCategoryError("Couldn't read this email's categories: " + (r.error && r.error.message || r.status));
+        return;
+      }
       var has = (r.value || []).indexOf(NOTE_CATEGORY) > -1;
+      if (Office.context.mailbox.item !== targetItem) return; // user moved on to another email
       if (shouldHaveTag && !has) {
-        ensureCategoryExists(function () { targetItem.categories.addAsync([NOTE_CATEGORY], function () {}); });
+        ensureCategoryExists(function () {
+          targetItem.categories.addAsync([NOTE_CATEGORY], function (addRes) {
+            if (addRes.status !== Office.AsyncResultStatus.Succeeded) {
+              showCategoryError("Couldn't tag this email: " + (addRes.error && addRes.error.message || addRes.status));
+            } else {
+              showCategoryError("");
+            }
+          });
+        });
       } else if (!shouldHaveTag && has) {
         targetItem.categories.removeAsync([NOTE_CATEGORY], function () {});
       }
     });
+  }
+
+  function showCategoryError(msg) {
+    var el = $("categoryStatus");
+    if (!msg) { el.classList.add("hidden"); el.textContent = ""; return; }
+    el.textContent = msg;
+    el.classList.remove("hidden");
   }
 
   function showEmpty() {

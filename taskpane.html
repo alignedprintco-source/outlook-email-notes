@@ -55,7 +55,7 @@
       <div class="status" id="senderStatus"><span></span></div>
     </section>
 
-    <p class="tip">Notes save automatically and are private to your mailbox. Pin this panel (📌 in its top corner) to keep it open while you click through emails.</p>
+    <p class="tip">Notes save automatically and are private to your mailbox. Pin this panel (📌 in its top corner) to keep it open while you click through emails. Any email with a note gets tagged with the <strong>📌 Has Note</strong> category, so you can spot it in your inbox list at a glance.</p>
   </div>
 
 <script>
@@ -64,6 +64,9 @@
   var SENDER_PREFIX = "apcoSender:";  // stored in mailbox roaming settings, keyed by sender address
   var ITEM_LIMIT = 2400;              // Outlook caps custom properties at ~2500 chars total
   var ROAMING_LIMIT = 32 * 1024;      // Outlook caps roaming settings at 32 KB total
+  var NOTE_CATEGORY = "📌 Has Note";  // Outlook category tag, so noted emails are visible in the inbox list
+  var categorySupported = false;      // set once we know this Outlook can do item categories (Mailbox 1.8+)
+  var categoryEnsured = false;        // we only need to create the master category once per session
 
   var $ = function (id) { return document.getElementById(id); };
   var customProps = null;
@@ -73,6 +76,7 @@
 
   Office.onReady(function (info) {
     if (info.host !== Office.HostType.Outlook) { $("loading").textContent = "Open this inside Outlook."; return; }
+    categorySupported = !!(Office.context.requirements && Office.context.requirements.isSetSupported("Mailbox", "1.8"));
     loadItem();
     // When pinned, the pane stays open; reload when the user selects another email.
     Office.context.mailbox.addHandlerAsync(Office.EventType.ItemChanged, function () { loadItem(); });
@@ -103,9 +107,13 @@
     item.loadCustomPropertiesAsync(function (r) {
       if (r.status === Office.AsyncResultStatus.Succeeded) {
         customProps = r.value;
-        $("itemNote").value = customProps.get(ITEM_KEY) || "";
+        var text = customProps.get(ITEM_KEY) || "";
+        $("itemNote").value = text;
         $("itemNote").disabled = false;
         setStatus("itemStatus", "", "");
+        // Self-heal: if this email already has a note but is missing the inbox tag
+        // (e.g. it was noted before this feature existed), tag it the first time it's opened.
+        setNoteCategory(text.trim() !== "");
       } else {
         customProps = null;
         $("itemNote").value = "";
@@ -115,6 +123,39 @@
       updateItemCount();
       suppress = false;
       $("loading").classList.add("hidden"); $("app").classList.remove("hidden");
+    });
+  }
+
+  // ---------- Inbox-list indicator (Outlook category) ----------
+  // Tags/untags the current message with a category so it's visible at a glance
+  // in the inbox list — Outlook shows category tags next to the subject line.
+  function ensureCategoryExists(callback) {
+    if (categoryEnsured) { callback(); return; }
+    Office.context.mailbox.masterCategories.getAsync(function (res) {
+      if (res.status !== Office.AsyncResultStatus.Succeeded) { callback(); return; }
+      var exists = (res.value || []).some(function (c) { return c.displayName === NOTE_CATEGORY; });
+      if (exists) { categoryEnsured = true; callback(); return; }
+      Office.context.mailbox.masterCategories.addAsync(
+        [{ displayName: NOTE_CATEGORY, color: Office.MailboxEnums.CategoryColor.Preset9 }],
+        function () { categoryEnsured = true; callback(); }
+      );
+    });
+  }
+
+  function setNoteCategory(shouldHaveTag) {
+    if (!categorySupported) return;
+    var item = Office.context.mailbox.item;
+    if (!item || !item.categories) return;
+    var targetItem = item; // guard against the selection changing before this callback runs
+    item.categories.getAsync(function (r) {
+      if (r.status !== Office.AsyncResultStatus.Succeeded) return;
+      if (Office.context.mailbox.item !== targetItem) return; // user moved on to another email
+      var has = (r.value || []).indexOf(NOTE_CATEGORY) > -1;
+      if (shouldHaveTag && !has) {
+        ensureCategoryExists(function () { targetItem.categories.addAsync([NOTE_CATEGORY], function () {}); });
+      } else if (!shouldHaveTag && has) {
+        targetItem.categories.removeAsync([NOTE_CATEGORY], function () {});
+      }
     });
   }
 
@@ -141,8 +182,12 @@
     }
     if (text.trim() === "") customProps.remove(ITEM_KEY); else customProps.set(ITEM_KEY, text);
     customProps.saveAsync(function (r) {
-      if (r.status === Office.AsyncResultStatus.Succeeded) setStatus("itemStatus", "Saved " + timeNow(), "ok");
-      else setStatus("itemStatus", "Save failed: " + (r.error && r.error.message || "unknown error"), "err");
+      if (r.status === Office.AsyncResultStatus.Succeeded) {
+        setStatus("itemStatus", "Saved " + timeNow(), "ok");
+        setNoteCategory(text.trim() !== "");
+      } else {
+        setStatus("itemStatus", "Save failed: " + (r.error && r.error.message || "unknown error"), "err");
+      }
     });
   }
 

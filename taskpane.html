@@ -55,7 +55,7 @@
       <div class="status" id="senderStatus"><span></span></div>
     </section>
 
-    <p class="tip">Notes save automatically and are private to your mailbox. Pin this panel (📌 in its top corner) to keep it open while you click through emails. Any email with a note gets tagged with the <strong>📌 Has Note</strong> category, so you can spot it in your inbox list at a glance.</p>
+    <p class="tip">Notes save automatically and are private to your mailbox. Pin this panel (📌 in its top corner) to keep it open while you click through emails. Any email with a note gets tagged with the <strong>Has Note</strong> category, so you can spot it in your inbox list at a glance.</p>
   </div>
 
 <script>
@@ -64,7 +64,8 @@
   var SENDER_PREFIX = "apcoSender:";  // stored in mailbox roaming settings, keyed by sender address
   var ITEM_LIMIT = 2400;              // Outlook caps custom properties at ~2500 chars total
   var ROAMING_LIMIT = 32 * 1024;      // Outlook caps roaming settings at 32 KB total
-  var NOTE_CATEGORY = "📌 Has Note";  // Outlook category tag, so noted emails are visible in the inbox list
+  var NOTE_CATEGORY = "Has Note";     // Outlook category tag, so noted emails are visible in the inbox list
+                                       // (plain text only — Outlook silently drops emoji from category names)
   var categorySupported = false;      // set once we know this Outlook can do item categories (Mailbox 1.8+)
   var categoryEnsured = false;        // we only need to create the master category once per session
 

@@ -4,7 +4,7 @@ A tiny, private Outlook add-in that gives you a notes panel on every email.
 
 - **Notes on this email** — saved onto the message itself (paper type, quantity, quote, proof status…). Travels with the email; shows up on any device where you install the add-in.
 - **Notes on this customer** — tied to the sender's address, so it shows up on *every* email from that customer.
-- **At-a-glance tag.** Any email with a note gets tagged with a **📌 Has Note** category, so you can spot it in your inbox list without opening the panel — no more wondering which emails you've already jotted something down on.
+- **At-a-glance tag.** Any email with a note gets tagged with a **Has Note** category, so you can spot it in your inbox list without opening the panel — no more wondering which emails you've already jotted something down on.
 - Notes auto-save, live in your Microsoft 365 mailbox, and never leave Microsoft's servers. No third-party service, no subscription.
 - Works in classic Outlook, new Outlook, Outlook on the web, and Outlook for Mac.
 
@@ -44,7 +44,7 @@ If step 4 fails with a vague "installation is taking longer than expected" messa
 - **Replies and forwards.** Each message carries its own note. If you want a note to follow a whole job, put it in the customer note, or add it to the newest email in the thread.
 - **Backups.** Notes are stored as hidden properties in your mailbox, so they're included in Microsoft's normal mailbox backup/retention. They are not visible to anyone you forward the email to.
 - **Removing it.** Same place as step 3 → My add-ins → Custom Addins → … → Remove. Existing notes stay stored on the messages (invisible) and reappear if you reinstall.
-- **The "Has Note" tag.** The first time you open an email that has a note, or the moment you type one, Outlook adds the **📌 Has Note** category to it — that's what makes it visible in the inbox list. Clear the note text and the tag comes back off automatically. You'll also see **📌 Has Note** if you ever open Outlook's Categorize menu; that's normal, it's just how the tag is implemented. If you ever want to change its color, right-click any tagged email → **Categorize** → **All Categories…**, select 📌 Has Note, and pick a new color — the add-in won't touch it again once it exists.
+- **The "Has Note" tag.** The first time you open an email that has a note, or the moment you type one, Outlook adds the **Has Note** category to it — that's what makes it visible in the inbox list. Clear the note text and the tag comes back off automatically. You'll also see **Has Note** if you ever open Outlook's Categorize menu; that's normal, it's just how the tag is implemented. If you ever want to change its color, right-click any tagged email → **Categorize** → **All Categories…**, select Has Note, and pick a new color — the add-in won't touch it again once it exists.
 - **Older notes.** Emails you noted before this update don't get tagged until you open them once in the panel (that's what re-applies the tag). New notes are tagged immediately.
 
 ## Changing it later
